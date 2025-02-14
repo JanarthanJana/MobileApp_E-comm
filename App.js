@@ -1,189 +1,239 @@
-import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
-import { Button, StyleSheet, Text, TextInput, View, TouchableOpacity, FlatList } from 'react-native';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+} from "react-native";
 
-export default function App() {
-  const [task, setTask] = useState("");
+const API_URL = "http://192.168.1.9:5000/api/products"; // Replace with your actual API URL
+
+const ProductManager = () => {
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [products, setProducts] = useState([]);
+  const [editId, setEditId] = useState(null); // Store product ID instead of index
 
-  const [tasks, setTasks] = useState([]);
-  const [descriptions, setDescriptions] = useState([]);
-  const [prices, setPrices] = useState([]);
+  // Fetch products from backend
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
-  const [editIndex, setEditIndex] = useState(-1);
-
-  const handleAddTask = () => {
-    if (task) {
-      if (editIndex !== -1) {
-        //Edit existing task
-        const updatedTasks = [...tasks];
-        const updatedDescriptions = [...descriptions];
-        const updatedprices = [...prices];
-
-        updatedTasks[editIndex] = task;
-        updatedDescriptions[editIndex] = description;
-        updatedprices[editIndex] = price;
-
-        setTasks(updatedTasks);
-        updatedDescriptions(updatedDescriptions);
-        updatedprices(updatedprices);
-
-        setEditIndex(-1);
-      }else {
-        //Add New Task
-        setTasks([...tasks, task])
-        setDescriptions([...descriptions, description])
-        setPrices([...prices, price])
-
-        
-      }
-      setTask("");
-      setDescription("");
-      setPrice("");
-
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      setProducts(data);
+    } catch (error) {
+      console.error("Error fetching products:", error);
     }
-    
-  }
+  };
 
-  const renderItem = ({item, index}) => {
-    return <View style={styles.task}>
-      <Text style={styles.taskText}>{item}</Text>
-      <View style={styles.taskActions}>
-        <TouchableOpacity onPress={() => handleEditTask(index)}>
+  const handleAddOrUpdateProduct = async () => {
+    if (!name || !description || !price) return;
+
+    const productData = { name, description, price: parseFloat(price) };
+
+    try {
+      if (editId !== null) {
+        // Update existing product
+        const response = await fetch(`${API_URL}/${editId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(productData),
+        });
+        if (response.ok) {
+          fetchProducts();
+          setEditId(null);
+        }
+      } else {
+        // Add new product
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(productData),
+        });
+        if (response.ok) fetchProducts();
+      }
+    } catch (error) {
+      console.error("Error adding/updating product:", error);
+    }
+
+    // Reset input fields
+    setName("");
+    setDescription("");
+    setPrice("");
+  };
+
+  const handleEditProduct = (product) => {
+    setName(product.name);
+    setDescription(product.description);
+    setPrice(product.price.toString());
+    setEditId(product.id); // Store product ID instead of index
+  };
+
+  const handleDeleteProduct = async (id) => {
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: "DELETE",
+      });
+      if (response.ok) fetchProducts();
+    } catch (error) {
+      console.error("Error deleting product:", error);
+    }
+  };
+
+  const renderItem = ({ item }) => (
+    <View style={styles.product}>
+      <View style={styles.productDetails}>
+        <Text style={styles.productName}>{item.name}</Text>
+        <Text style={styles.productDescription}>{item.description}</Text>
+        <Text style={styles.productPrice}>Rs {item.price}</Text>
+      </View>
+      <View style={styles.productActions}>
+        <TouchableOpacity onPress={() => handleEditProduct(item)}>
           <Text style={styles.editButton}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDeleteTask(index)}>
+        <TouchableOpacity onPress={() => handleDeleteProduct(item.id)}>
           <Text style={styles.deleteButton}>Delete</Text>
         </TouchableOpacity>
       </View>
     </View>
-  }
-
-  const handleEditTask = (index) => {
-    const taskToEdit = tasks[index];
-    setTask(taskToEdit);
-    setEditIndex(index);
-  }
-
-  const handleDeleteTask = (index) => {
-   const updatedTasks = [...tasks];
-   updatedTasks.splice(index,1);
-   setTasks(updatedTasks);
-    
-  }
+  );
 
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>E-commerce</Text>
       <Text style={styles.title}>Product Management</Text>
+
       <TextInput
         style={styles.input}
-        placeholder='Enter product name'
-        value={task}
-        onChangeText={(text) => setTask(text)}
+        placeholder="Product Name"
+        value={name}
+        onChangeText={setName}
       />
       <TextInput
         style={styles.input}
-        placeholder='Enter product description'
+        placeholder="Description"
         value={description}
-        onChangeText={(text) => setDescription(text)}
+        onChangeText={setDescription}
       />
       <TextInput
         style={styles.input}
-        placeholder='Enter price'
+        placeholder="Price"
         value={price}
-        onChangeText={(text) => setPrice(text)}
+        onChangeText={setPrice}
+        keyboardType="numeric"
       />
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={handleAddTask}
-      >
-        <Text style={styles.addButtonText}>
-          {editIndex !== -1 ? "Update Task": "Add Task"}
-        </Text>
+
+      <TouchableOpacity style={styles.addButton} onPress={handleAddOrUpdateProduct}>
+        <Text style={styles.addButtonText}>{editId !== null ? "Update Product" : "Add Product"}</Text>
       </TouchableOpacity>
-      <FlatList
-        data={tasks}
-        renderItem={renderItem}
-        keyExtractor={(item, index) => index.toString()}
-      />
-      <FlatList
-        data={prices}
-        renderItem={renderItem}
-        keyExtractor={(item, index) => index.toString()}
-      />
-      <FlatList
-        data={descriptions}
-        renderItem={renderItem}
-        keyExtractor={(item, index) => index.toString()}
-      />
+
+      {products.length > 0 ? (
+        <FlatList
+          data={products}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id?.toString() || Math.random().toString()} // Ensures valid key
+        />
+      ) : (
+        <Text style={styles.noProducts}>No products available</Text>
+      )}
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 40,
-    marginTop: 40
+    marginTop: 40,
   },
   heading: {
     fontSize: 30,
     fontWeight: "bold",
-    marginBottom: 7,
+    marginBottom: 10,
     color: "dodgerblue",
-    textAlign:"center"
+    textAlign: "center",
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 20,
-    textAlign:"center"
-
+    textAlign: "center",
   },
   input: {
-    borderWidth : 3,
+    borderWidth: 2,
     borderColor: "#ccc",
     padding: 10,
     marginBottom: 10,
     borderRadius: 10,
-    fontSize: 18
+    fontSize: 18,
   },
   addButton: {
-    backgroundColor: 'dodgerblue',
+    backgroundColor: "dodgerblue",
     padding: 10,
     borderRadius: 5,
-    marginBottom: 10
+    marginBottom: 10,
   },
   addButtonText: {
     color: "white",
     fontWeight: "bold",
     textAlign: "center",
-    fontSize: 18
+    fontSize: 18,
   },
-  task : {
+  product: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 15
+    alignItems: "center",
+    backgroundColor: "#f9f9f9",
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  taskActions: {
-    flexDirection: "row"
+  productDetails: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  productDescription: {
+    fontSize: 16,
+    color: "#666",
+  },
+  productPrice: {
+    fontSize: 16,
+    color: "green",
+  },
+  productActions: {
+    flexDirection: "row",
   },
   editButton: {
     color: "dodgerblue",
     fontWeight: "bold",
     fontSize: 18,
-    marginRight: 10
+    marginRight: 10,
   },
   deleteButton: {
     color: "red",
     fontWeight: "bold",
-    fontSize: 18
+    fontSize: 18,
   },
-  taskText: {
-    fontSize: 19
-  }
-
-
+  noProducts: {
+    textAlign: "center",
+    fontSize: 18,
+    marginTop: 20,
+    color: "#666",
+  },
 });
+
+export default ProductManager;
