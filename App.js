@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
+  Image
 } from "react-native";
 
 const API_URL = "http://192.168.1.9:5000/api/products"; // Replace with your actual API URL
@@ -72,7 +73,7 @@ const ProductManager = () => {
     setName(product.name);
     setDescription(product.description);
     setPrice(product.price.toString());
-    setEditId(product.id); // Store product ID instead of index
+    setEditId(product._id); // Store product ID instead of index
   };
 
   const handleDeleteProduct = async (id) => {
@@ -92,12 +93,14 @@ const ProductManager = () => {
         <Text style={styles.productName}>{item.name}</Text>
         <Text style={styles.productDescription}>{item.description}</Text>
         <Text style={styles.productPrice}>Rs {item.price}</Text>
+        <Image source={{ uri: `http://192.168.1.9:5000/uploads/${item.image}` }} style={styles.image} alt="img" />
+        {/* <Text>{item._id}</Text> */}
       </View>
       <View style={styles.productActions}>
         <TouchableOpacity onPress={() => handleEditProduct(item)}>
           <Text style={styles.editButton}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDeleteProduct(item.id)}>
+        <TouchableOpacity onPress={() => handleDeleteProduct(item._id)}>
           <Text style={styles.deleteButton}>Delete</Text>
         </TouchableOpacity>
       </View>
@@ -129,15 +132,22 @@ const ProductManager = () => {
         keyboardType="numeric"
       />
 
-      <TouchableOpacity style={styles.addButton} onPress={handleAddOrUpdateProduct}>
-        <Text style={styles.addButtonText}>{editId !== null ? "Update Product" : "Add Product"}</Text>
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={handleAddOrUpdateProduct}
+      >
+        <Text style={styles.addButtonText}>
+          {editId !== null ? "Update Product" : "Add Product"}
+        </Text>
       </TouchableOpacity>
 
       {products.length > 0 ? (
         <FlatList
           data={products}
           renderItem={renderItem}
-          keyExtractor={(item) => item.id?.toString() || Math.random().toString()} // Ensures valid key
+          keyExtractor={(item) =>
+            item.id?.toString() || Math.random().toString()
+          } // Ensures valid key
         />
       ) : (
         <Text style={styles.noProducts}>No products available</Text>
@@ -234,6 +244,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
     color: "#666",
   },
+  image:{
+    width: 100,
+    height: 100,
+  }
 });
 
 export default ProductManager;
