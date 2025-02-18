@@ -6,22 +6,25 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  Image
+  Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 
-const API_URL = "http://192.168.1.9:5000/api/products"; // Replace with your actual API URL
+const API_URL = "http://192.168.1.9:5000/api/products";
 
 const ProductManager = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [products, setProducts] = useState([]);
-  const [editId, setEditId] = useState(null); // Store product ID instead of index
+  const [editId, setEditId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [image, setImage] = useState(null);
 
-  // Fetch products from backend
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [products]);
+  
 
   const fetchProducts = async () => {
     try {
@@ -33,121 +36,174 @@ const ProductManager = () => {
     }
   };
 
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      alert("Permission denied! Please allow access to photos.");
+      return;
+    }
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+    }
+  };
+
   const handleAddOrUpdateProduct = async () => {
     if (!name || !description || !price) return;
-
-    const productData = { name, description, price: parseFloat(price) };
-
+    let formData = new FormData();
+    formData.append("name", name);
+    formData.append("description", description);
+    formData.append("price", parseFloat(price));
+    if (image) {
+      formData.append("image", {
+        uri: image,
+        type: "image/jpeg",
+        name: "product.jpg",
+      });
+    }
     try {
-      if (editId !== null) {
-        // Update existing product
-        const response = await fetch(`${API_URL}/${editId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(productData),
-        });
-        if (response.ok) {
-          fetchProducts();
-          setEditId(null);
+      const response = await fetch(
+        editId !== null ? `${API_URL}/${editId}` : API_URL,
+        {
+          method: editId !== null ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          body: formData,
         }
-      } else {
-        // Add new product
-        const response = await fetch(API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(productData),
-        });
-        if (response.ok) fetchProducts();
+      );
+      if (response.ok) {
+        fetchProducts();
+        setEditId(null);
+        setName("");
+        setDescription("");
+        setPrice("");
+        setImage(null);
+        setShowForm(false);
       }
     } catch (error) {
       console.error("Error adding/updating product:", error);
     }
-
-    // Reset input fields
-    setName("");
-    setDescription("");
-    setPrice("");
   };
 
   const handleEditProduct = (product) => {
+    setEditId(product._id);
     setName(product.name);
     setDescription(product.description);
     setPrice(product.price.toString());
-    setEditId(product._id); // Store product ID instead of index
+    setShowForm(true);
   };
 
   const handleDeleteProduct = async (id) => {
     try {
-      const response = await fetch(`${API_URL}/${id}`, {
-        method: "DELETE",
-      });
-      if (response.ok) fetchProducts();
+      await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+      fetchProducts();
     } catch (error) {
       console.error("Error deleting product:", error);
     }
   };
-
-  const renderItem = ({ item }) => (
-    <View style={styles.product}>
-      <View style={styles.productDetails}>
-        <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productDescription}>{item.description}</Text>
-        <Text style={styles.productPrice}>Rs {item.price}</Text>
-        <Image source={{ uri: `http://192.168.1.9:5000/uploads/${item.image}` }} style={styles.image} alt="img" />
-        {/* <Text>{item._id}</Text> */}
-      </View>
-      <View style={styles.productActions}>
-        <TouchableOpacity onPress={() => handleEditProduct(item)}>
-          <Text style={styles.editButton}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDeleteProduct(item._id)}>
-          <Text style={styles.deleteButton}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>E-commerce</Text>
       <Text style={styles.title}>Product Management</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Product Name"
-        value={name}
-        onChangeText={setName}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Description"
-        value={description}
-        onChangeText={setDescription}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Price"
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="numeric"
-      />
+      {!showForm && (
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setShowForm(true)}
+        >
+          <Text style={styles.addButtonText}>Add Product</Text>
+        </TouchableOpacity>
+      )}
 
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={handleAddOrUpdateProduct}
-      >
-        <Text style={styles.addButtonText}>
-          {editId !== null ? "Update Product" : "Add Product"}
-        </Text>
-      </TouchableOpacity>
+      {showForm && (
+        <View style={styles.formContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Product Name"
+            value={name}
+            onChangeText={setName}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Description"
+            value={description}
+            onChangeText={setDescription}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Price"
+            value={price}
+            onChangeText={setPrice}
+            keyboardType="numeric"
+          />
+          <TouchableOpacity style={styles.imgButton} onPress={pickImage}>
+            <Text style={styles.addButtonText}>Upload Image</Text>
+          </TouchableOpacity>
+          {image && (
+            <Image source={{ uri: image }} style={styles.previewImage} />
+          )}
+
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleAddOrUpdateProduct}
+          >
+            <Text style={styles.addButtonText}>
+              {editId !== null ? "Update Product" : "Add Product"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => {
+              setName("");
+              setDescription("");
+              setPrice("");
+              setEditId(null);
+              setShowForm(false);
+            }}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {products.length > 0 ? (
         <FlatList
           data={products}
-          renderItem={renderItem}
+          renderItem={({ item }) => (
+            <View style={styles.product}>
+              <Image
+                source={{
+                  uri: `http://192.168.1.9:5000/uploads/${item.image}`,
+                }}
+                style={styles.image}
+              />
+              <View style={styles.productDetails}>
+                <Text style={styles.productName}>{item.name}</Text>
+                <Text style={styles.productDescription}>
+                  {item.description}
+                </Text>
+                <Text style={styles.productPrice}>Rs {item.price}</Text>
+              </View>
+              <View style={styles.productActions}>
+                <TouchableOpacity onPress={() => handleEditProduct(item)}>
+                  <Text style={styles.editButton}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDeleteProduct(item._id)}>
+                  <Text style={styles.deleteButton}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
           keyExtractor={(item) =>
-            item.id?.toString() || Math.random().toString()
-          } // Ensures valid key
+            item._id?.toString() || Math.random().toString()
+          }
         />
       ) : (
         <Text style={styles.noProducts}>No products available</Text>
@@ -157,97 +213,84 @@ const ProductManager = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 40,
-    marginTop: 40,
-  },
+  container: { flex: 1, padding: 20, backgroundColor: "#fff", marginTop: "50" },
   heading: {
     fontSize: 30,
     fontWeight: "bold",
-    marginBottom: 10,
     color: "dodgerblue",
     textAlign: "center",
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
-    marginBottom: 20,
     textAlign: "center",
+    marginBottom: 10,
+  },
+  formContainer: {
+    backgroundColor: "#f8f8f8",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
   },
   input: {
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: "#ccc",
     padding: 10,
-    marginBottom: 10,
     borderRadius: 10,
-    fontSize: 18,
+    marginBottom: 10,
   },
   addButton: {
     backgroundColor: "dodgerblue",
     padding: 10,
-    borderRadius: 5,
-    marginBottom: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
   },
-  addButtonText: {
-    color: "white",
-    fontWeight: "bold",
-    textAlign: "center",
-    fontSize: 18,
+  addButtonText: { color: "white", fontSize: 16, fontWeight: "bold" },
+  cancelButton: {
+    backgroundColor: "red",
+    padding: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 5,
+  },
+  imgButton: {
+    backgroundColor: "green",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+    width: "150",
+    alignItems: "center",
+  },
+  previewImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 10,
+    alignSelf: "center",
+    marginBottom: 10,
   },
   product: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "#f1f1f5",
     padding: 10,
-    marginBottom: 10,
+    marginTop: 10,
     borderRadius: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  productDetails: {
-    flex: 1,
-  },
-  productName: {
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  productDescription: {
-    fontSize: 16,
-    color: "#666",
-  },
-  productPrice: {
-    fontSize: 16,
-    color: "green",
-  },
-  productActions: {
-    flexDirection: "row",
-  },
-  editButton: {
-    color: "dodgerblue",
-    fontWeight: "bold",
-    fontSize: 18,
-    marginRight: 10,
-  },
-  deleteButton: {
-    color: "red",
-    fontWeight: "bold",
-    fontSize: 18,
-  },
+  productDetails: { flex: 1, marginLeft: 10 },
+  productName: { fontSize: 18, fontWeight: "bold" },
+  productDescription: { fontSize: 14, color: "#666" },
+  productPrice: { fontSize: 16, fontWeight: "bold", color: "green" },
+  productActions: { flexDirection: "row", alignItems: "center" },
+  editButton: { color: "blue", fontSize: 16, marginRight: 10 },
+  deleteButton: { color: "red", fontSize: 16 },
+  image: { width: 50, height: 50, borderRadius: 5 },
   noProducts: {
     textAlign: "center",
-    fontSize: 18,
     marginTop: 20,
+    fontSize: 16,
     color: "#666",
   },
-  image:{
-    width: 100,
-    height: 100,
-  }
 });
 
 export default ProductManager;
